@@ -111,6 +111,49 @@
       }
     },
     {
+      "id": "strix-halo-llama-hrx-staging",
+      "backend": "llama_cpp",
+      "name": "llama-hrx-staging",
+      "container_name": "llama-hrx-staging",
+      "group": "Dev/Experimental Toolboxes",
+      "image": "docker.io/kyuz0/amd-strix-halo-toolboxes:hrx-staging",
+      "channel": "experimental",
+      "maturity": "experimental",
+      "description": "AMD HRX staging build for Strix Halo; Qwen3-30B-A3B-Instruct-2507 Q4_K_M is the initial RFC target. Other model coverage is evolving.",
+      "runtime_profile": "amd-rocm",
+      "supports_load_mode": true,
+      "features": {
+        "interactive": "experimental",
+        "server": "experimental",
+        "models": "experimental"
+      },
+      "backend_config": {
+        "recommended_use": {
+          "platform_id": "strix-halo",
+          "model_id": "llama-unsloth-qwen3-30b-a3b-instruct-2507-gguf",
+          "model_filename_pattern": "*Q4_K_M*.gguf",
+          "model_display_name": "Qwen3 30B A3B Instruct 2507 Q4_K_M",
+          "message": "The original HRX RFC targeted this exact model and quant on gfx1151. The staging build has broader but still evolving model coverage.",
+          "documentation_url": "https://github.com/ggml-org/llama.cpp/discussions/27219",
+          "notes": [
+            "The original draft PR only established Qwen3-30B-A3B-Instruct-2507 Q4_K_M as its supported target.",
+            "AMD's newer staging branch adds broader operator and model coverage, but other GGUFs are not validated for this toolbox.",
+            "Keep batch and microbatch equal for the initial Qwen test; the RFC notes that chunked prefill against a non-empty KV cache is unsupported."
+          ],
+          "server_defaults": {
+            "context_size": 8192,
+            "batch_size": 1024,
+            "ubatch_size": 1024,
+            "gpu_layers": 999,
+            "parallel_sequences": 1,
+            "load_mode": "none",
+            "flash_attention": true,
+            "mtp_enabled": false
+          }
+        }
+      }
+    },
+    {
       "id": "strix-halo-llama-rocm-10-0-qwen-3-8-flash-next",
       "backend": "llama_cpp",
       "name": "llama-rocm-10.0-qwen-3.8-flash-next",
@@ -683,6 +726,7 @@
       "description": "Ryzen AI Max, gfx1151",
       "toolbox_ids": [
         "strix-halo-llama-rocm-10-0",
+        "strix-halo-llama-hrx-staging",
         "strix-halo-llama-rocm-10-0-qwen-3-8-flash-next",
         "strix-halo-llama-rocm-10-0-engramhalo",
         "strix-halo-llama-vulkan-radv",

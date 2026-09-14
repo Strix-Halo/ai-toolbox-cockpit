@@ -50,9 +50,13 @@ class CatalogTests(unittest.TestCase):
         }
         self.assertGreaterEqual(len(repositories), 4)
 
-    def test_strix_halo_experimental_rocm_llama_toolboxes_are_catalogued(self) -> None:
+    def test_strix_halo_experimental_llama_toolboxes_are_catalogued(self) -> None:
         catalog = load_toolbox_catalog()
         expected = {
+            "strix-halo-llama-hrx-staging": (
+                "llama-hrx-staging",
+                "docker.io/kyuz0/amd-strix-halo-toolboxes:hrx-staging",
+            ),
             "strix-halo-llama-rocm-10-0-qwen-3-8-flash-next": (
                 "llama-rocm-10.0-qwen-3.8-flash-next",
                 "docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-10.0-qwen-3.8-flash-next",
@@ -69,6 +73,25 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(toolbox.image, image)
             self.assertEqual(toolbox.channel, "experimental")
             self.assertIn(toolbox.runtime_profile, {"amd-rocm", "amd-rocm-hipblaslt"})
+
+    def test_hrx_toolbox_records_initial_rfc_model_and_quant(self) -> None:
+        catalog = load_toolbox_catalog()
+        toolbox_id = "strix-halo-llama-hrx-staging"
+        toolbox = catalog.toolboxes[toolbox_id]
+        recommended = toolbox.backend_config["recommended_use"]
+
+        self.assertIn(toolbox_id, catalog.platform("strix-halo").toolbox_ids)
+        self.assertEqual(toolbox.backend, "llama_cpp")
+        self.assertEqual(recommended["model_filename_pattern"], "*Q4_K_M*.gguf")
+        self.assertEqual(
+            recommended["model_id"],
+            "llama-unsloth-qwen3-30b-a3b-instruct-2507-gguf",
+        )
+        self.assertEqual(recommended["server_defaults"]["batch_size"], 1024)
+        self.assertEqual(recommended["server_defaults"]["ubatch_size"], 1024)
+        self.assertFalse(recommended["server_defaults"]["mtp_enabled"])
+        models = load_model_catalog().backends["llama_cpp"].entries
+        self.assertEqual(models[-1]["id"], recommended["model_id"])
 
     def test_r9700_toolboxes_match_the_active_source_images(self) -> None:
         catalog = load_toolbox_catalog()
@@ -467,7 +490,12 @@ class CatalogTests(unittest.TestCase):
 
     def test_model_catalog_rejects_invalid_dspark_defaults(self) -> None:
         data = self.asset("models.json")
-        data["backends"]["llama_cpp"]["models"][0]["dspark"]["default_draft_n"] = 0
+        model = next(
+            entry
+            for entry in data["backends"]["llama_cpp"]["models"]
+            if entry["id"] == "llama-unsloth-deepseek-v4-flash-0731-gguf"
+        )
+        model["dspark"]["default_draft_n"] = 0
         with self.assertRaisesRegex(CatalogError, "default_draft_n"):
             ModelCatalog.from_dict(data)
 
@@ -484,7 +512,12 @@ class CatalogTests(unittest.TestCase):
 
     def test_model_catalog_rejects_invalid_toolbox_defaults(self) -> None:
         data = self.asset("models.json")
-        defaults = data["backends"]["llama_cpp"]["models"][0]["toolbox_defaults"]
+        model = next(
+            entry
+            for entry in data["backends"]["llama_cpp"]["models"]
+            if entry["id"] == "llama-unsloth-deepseek-v4-flash-0731-gguf"
+        )
+        defaults = model["toolbox_defaults"]
         defaults["strix-halo-llama-vulkan-radv-performance"]["batch_size"] = 0
         with self.assertRaisesRegex(CatalogError, "batch_size"):
             ModelCatalog.from_dict(data)

@@ -688,6 +688,11 @@
             }
           },
           "id": "llama-jcbtc-qwopus3-6-27b-v2-chadrock-rocmfp4-mtp"
+        },
+        {
+          "name": "Qwen3 30B A3B Instruct 2507 (HRX test)",
+          "repo": "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+          "id": "llama-unsloth-qwen3-30b-a3b-instruct-2507-gguf"
         }
       ]
     },
