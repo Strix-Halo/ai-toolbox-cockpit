@@ -173,7 +173,7 @@ Vision recognized test shapes but did not always return strict unfenced JSON.
 
 ## Halogen Flash on Strix Halo
 
-[Halogen Flash](https://github.com/peonist-ai/halogen-flash-server) is a closed-source server for Qwen3.8-Flash-Next on gfx1151. Cockpit pins its image to `ghcr.io/peonist-ai/halogen-flash-server:0.5.4`; the integration remains experimental until validated on the remote GPU host.
+[Halogen Flash](https://github.com/peonist-ai/halogen-flash-server) is a closed-source server for Qwen3.8-Flash-Next on gfx1151. Cockpit follows `ghcr.io/peonist-ai/halogen-flash-server:latest` and uses `--pull=always` with Podman and Docker to fetch the current image before each server launch. Starting requires registry access; a failed pull stops the launch. Model bundles remain revision-pinned; the integration remains experimental until validated on the remote GPU host.
 
 1. Select **AMD Strix Halo**, select Halogen in **Toolboxes**, and use **Create / Update** to pull the image.
 2. In **Models → Halogen Flash**, keep the recommended W4B quality bundle or choose the speed overlay. The download includes the exact checkpoint, selected overlay, and tokenizer from the [upstream weights repository](https://huggingface.co/peonist-ai/halogen-qwen3.8-flash-next), pinned to a revision. Each bundle needs about 118 GiB; the checkpoint and tokenizer are shared between precision choices.

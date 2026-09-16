@@ -75,15 +75,17 @@ After each backend passes, record the exact image digest, model/repository or wo
 
 ## 7. Halogen Flash (Strix Halo only; validation pending)
 
-Use the upstream release 0.4.4 / Qwen3.8-Flash-Next W4B quality pair as the first
-case. Run these phases separately on the user's gfx1151 GPU host. Do not run
-them on the development machine.
+Use the upstream `latest` image / Qwen3.8-Flash-Next W4B quality pair as the first
+case. Record the resolved image digest and server version for each validation
+run. Run these phases separately on the user's gfx1151 GPU host. Do not run them
+on the development machine.
 
 1. **Image lifecycle:** select Halogen under Strix Halo and confirm Create /
    Update previews only `podman pull` or `docker pull`. Pull it, refresh, and
    confirm Image ready appears. Enter must direct the user to Server Mode;
    no Toolbx/Distrobox container should be created. Repeat Create / Update to
-   verify an already-pulled image can be refreshed.
+   verify an already-pulled `ghcr.io/peonist-ai/halogen-flash-server:latest` image
+   can be refreshed.
 2. **Model preparation:** if the quality bundle is not already available,
    download it from Models as a separate operation. Use `~/halogen-models` or
    save a dedicated path. Confirm the preview includes the pinned revision,
@@ -94,7 +96,9 @@ them on the development machine.
    localhost binding. Verify the read-only `/models` mount, GPU devices,
    `memlock`/IPC settings, selected overlay, and API port in the preview. Podman
    uses `keep-groups`; Docker uses `video` and `render`. The image's entrypoint
-   must remain intact. Start and allow the cold load to finish.
+   must remain intact. Confirm `--pull=always` appears in the launch preview and
+   the engine checks the registry even with a cached image. A failed pull must
+   stop the launch. Start and allow the cold load to finish.
 4. From another terminal, query `http://127.0.0.1:8731/health` and
    `/v1/models`, then send one short chat request to `/v1/chat/completions`
    using the returned model ID. Record the startup precision message and

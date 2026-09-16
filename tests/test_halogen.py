@@ -63,7 +63,7 @@ class HalogenTests(TestCase):
         catalog = load_toolbox_catalog()
         item = catalog.toolboxes[TOOLBOX_ID]
         self.assertFalse(item.toolbox_compatible)
-        self.assertEqual(item.image, "ghcr.io/peonist-ai/halogen-flash-server:0.5.4")
+        self.assertEqual(item.image, "ghcr.io/peonist-ai/halogen-flash-server:latest")
         self.assertEqual(item.feature_state("interactive"), "unavailable")
         for platform in catalog.platforms:
             self.assertEqual("halogen" in catalog.platform_backend_ids(platform.id), platform.id == "strix-halo")
@@ -183,6 +183,7 @@ class HalogenTests(TestCase):
                                                engine_args=list(profile.engine_args), platform_id="strix-halo",
                                                models_dir=root, bundle_id=bundle["id"], port=9000)
                     self.assertEqual(command[-1], toolbox.image)
+                    self.assertIn("--pull=always", command[:command.index(toolbox.image)])
                     self.assertNotIn("--entrypoint", command)
                     self.assertEqual(command[command.index("-p") + 1], "127.0.0.1:9000:9000")
                     self.assertEqual(command.count("-p"), 1)
