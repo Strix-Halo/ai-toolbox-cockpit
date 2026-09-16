@@ -225,6 +225,21 @@ class CatalogTests(unittest.TestCase):
             load_model_catalog().backends["ds4"].config["families"],
         )
 
+    def test_ds4_catalog_contains_qwen38_flash_next_artifacts(self) -> None:
+        entries = {
+            entry["filename"]: entry
+            for entry in load_model_catalog().backends["ds4"].entries
+        }
+
+        q2 = entries["Qwen3.8-Flash-Next-Q2.gguf"]
+        q4 = entries["Qwen3.8-Flash-Next-Q4.gguf"]
+        for model in (q2, q4):
+            self.assertEqual(model["repo"], "antirez/qwen3.8-flash-next-gguf")
+            self.assertEqual(model["family"], "qwen3.8-flash-next")
+            self.assertEqual(model["artifact_role"], "main")
+        self.assertEqual(q2["size_gb"], 137.1)
+        self.assertEqual(q4["size_gb"], 165.11)
+
     def test_vllm_catalog_contains_current_toolbox_models(self) -> None:
         entries = {
             entry["repo"]: entry

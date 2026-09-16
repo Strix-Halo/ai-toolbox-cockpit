@@ -892,6 +892,26 @@
           "recommended": false,
           "sha256": "cc283f032b3e8b8d78aeb5fccaa14e97b859b0c53aae3cd6bffa690ddf0e9e15",
           "id": "ds4-deepseek-v4-1-flash-vision-gguf"
+        },
+        {
+          "name": "Qwen 3.8 Flash Next — Q2 (~137.1 GiB)",
+          "family": "qwen3.8-flash-next",
+          "repo": "antirez/qwen3.8-flash-next-gguf",
+          "filename": "Qwen3.8-Flash-Next-Q2.gguf",
+          "artifact_role": "main",
+          "size_gb": 137.1,
+          "recommended": false,
+          "id": "ds4-qwen3-8-flash-next-q2-gguf"
+        },
+        {
+          "name": "Qwen 3.8 Flash Next — Q4 (~165.1 GiB) — Higher Quality",
+          "family": "qwen3.8-flash-next",
+          "repo": "antirez/qwen3.8-flash-next-gguf",
+          "filename": "Qwen3.8-Flash-Next-Q4.gguf",
+          "artifact_role": "main",
+          "size_gb": 165.11,
+          "recommended": false,
+          "id": "ds4-qwen3-8-flash-next-q4-gguf"
         }
       ],
       "config": {
@@ -914,7 +934,8 @@
           "glm-5.3-flash": {
             "standalone_ctx": 262144
           },
-          "deepseek-v4.1-flash": {}
+          "deepseek-v4.1-flash": {},
+          "qwen3.8-flash-next": {}
         },
         "default_server_defaults": {}
       }
