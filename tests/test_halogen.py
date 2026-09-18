@@ -171,7 +171,7 @@ class HalogenTests(TestCase):
             overlay.symlink_to(outside)
             self.assertEqual(len(incomplete_files(bundle, root / "models")), 1)
 
-    def test_native_commands_preserve_entrypoint_mount_bundle_and_publish_only_api(self):
+    def test_native_commands_preserve_entrypoint_and_isolate_network_and_mounts(self):
         toolbox = load_toolbox_catalog().toolboxes[TOOLBOX_ID]
         profile = load_toolbox_catalog().runtime_profiles[toolbox.runtime_profile]
         with tempfile.TemporaryDirectory() as temporary:
@@ -185,18 +185,38 @@ class HalogenTests(TestCase):
                     self.assertEqual(command[-1], toolbox.image)
                     self.assertIn("--pull=always", command[:command.index(toolbox.image)])
                     self.assertNotIn("--entrypoint", command)
-                    self.assertEqual(command[command.index("-p") + 1], "127.0.0.1:9000:9000")
-                    self.assertEqual(command.count("-p"), 1)
+                    self.assertNotIn("-p", command)
+                    self.assertIn("--network=none", command)
+                    self.assertIn("--cap-drop=NET_ADMIN", command)
+                    self.assertIn("--cap-drop=NET_RAW", command)
+                    self.assertIn("no-new-privileges", command)
                     self.assertIn("HALOGEN_API_PORT=9000", command)
                     self.assertIn(f"HALOGEN_CK_OVERLAY=/models/{bundle['overlay']}", command)
                     self.assertIn("HALOGEN_TOKENIZER=/models/tokenizer", command)
-                    self.assertIn(f"{root}:/models:ro", command)
+                    mounts = [command[i + 1] for i, arg in enumerate(command) if arg == "-v"]
+                    self.assertEqual(mounts, [f"{root / item['path']}:/models/{item['path']}:ro"
+                                              for item in bundle["files"]])
                     self.assertIn("--ipc=host", command)
                     self.assertIn("memlock=-1:-1", command)
                     self.assertEqual("keep-groups" in command, engine == "podman")
                     self.assertEqual("render" in command, engine == "docker")
                     self.assertNotIn("HALOGEN_DOWNLOAD", " ".join(command))
                     self.assertIn(CONTAINER_NAME, command)
+
+    def test_profile_cannot_override_network_or_add_host_access(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = small_bundle(root)
+            with patch("ai_toolbox_cockpit.backends.halogen.runner.get_bundle", return_value=bundle):
+                for args in (["--network=host"], ["--net", "bridge"], ["--privileged"],
+                             ["-v", "/:/host"], ["--mount=type=bind,src=/,dst=/host"],
+                             ["--device", "/dev/infiniband"], ["--cap-add=NET_ADMIN"],
+                             ["--pid=host"], ["--env", "HF_TOKEN=secret"],
+                             ["--security-opt", "label=disable"], ["--device"]):
+                    for engine in ("podman", "docker"):
+                        with self.subTest(args=args, engine=engine), self.assertRaisesRegex(ValueError, "isolation"):
+                            build_server_cmd(engine=engine, image="example/image:latest", engine_args=args,
+                                             platform_id="strix-halo", models_dir=root, bundle_id=bundle["id"])
 
     def test_builder_refuses_invalid_settings_and_incomplete_bundles(self):
         toolbox = load_toolbox_catalog().toolboxes[TOOLBOX_ID]
@@ -364,7 +384,8 @@ class HalogenAppTests(IsolatedAsyncioTestCase):
             await pilot.pause()
             message = str(app.screen.query_one("#confirm_message", Label).render())
             self.assertIn("HALOGEN_CK_OVERLAY", message)
-            self.assertIn("127.0.0.1:8731:8731", message)
+            self.assertIn("Host API relay: 127.0.0.1:8731", message)
+            self.assertIn("--network=none", message)
             await pilot.click("#btn_no")
             await pilot.pause()
             suspended = []
@@ -374,9 +395,10 @@ class HalogenAppTests(IsolatedAsyncioTestCase):
                 suspended.append(True)
                 yield
                 suspended.pop()
-            def run(*args):
+            def run(*args, **kwargs):
                 self.assertEqual(suspended, [True])
                 self.assertEqual(args[2], CONTAINER_NAME)
+                self.assertEqual(kwargs["isolated_api"], ("127.0.0.1", 8731))
             with patch.object(app, "suspend", side_effect=suspension), \
                  patch("ai_toolbox_cockpit.backends.halogen.server.run_foreground_server", side_effect=run) as runner:
                 panel._start_confirmed(True)

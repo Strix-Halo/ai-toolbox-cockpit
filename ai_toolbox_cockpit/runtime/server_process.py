@@ -3,7 +3,9 @@
 import shlex
 import signal
 import subprocess
+from contextlib import nullcontext
 
+from .isolated_api import IsolatedAPIRelay
 from .terminal import command_failed, pause_after_failure
 
 
@@ -39,6 +41,7 @@ def run_foreground_server(
     container_name: str,
     *,
     display_command: list[str] | None = None,
+    isolated_api: tuple[str, int] | None = None,
 ) -> int:
     """Run a server until exit/Ctrl+C and always remove its named container."""
     print(f"\nStarting server:\n{shlex.join(display_command or command)}\n")
@@ -54,8 +57,14 @@ def run_foreground_server(
     old_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
     process: subprocess.Popen | None = None
     try:
-        process = subprocess.Popen(command)
-        return_code = process.wait()
+        relay = (IsolatedAPIRelay(engine, container_name, *isolated_api)
+                 if isolated_api is not None else nullcontext())
+        with relay:
+            if isolated_api is not None:
+                print(f"Isolated API relay: {isolated_api[0]}:{isolated_api[1]} "
+                      "-> container loopback (no container network).\n")
+            process = subprocess.Popen(command)
+            return_code = process.wait()
         if command_failed(return_code):
             pause_after_failure(f"Server exited with status {return_code}.")
         return return_code
@@ -70,4 +79,11 @@ def run_foreground_server(
             process.wait()
         return 130
     finally:
-        signal.signal(signal.SIGINT, old_handler)
+        try:
+            if isolated_api is not None:
+                # Also remove the isolated server on ordinary exit or relay failure.
+                subprocess.run([engine, "rm", "-f", container_name], capture_output=True)
+        except OSError as error:
+            print(f"Could not remove the server container: {error}")
+        finally:
+            signal.signal(signal.SIGINT, old_handler)

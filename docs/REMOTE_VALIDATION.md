@@ -93,8 +93,10 @@ on the development machine.
    downloading; confirm the saved directory also appears in Server Mode.
    Test an interrupted download/resume separately if needed.
 3. **Serving:** select the ready quality bundle and default settings with
-   localhost binding. Verify the read-only `/models` mount, GPU devices,
-   `memlock`/IPC settings, selected overlay, and API port in the preview. Podman
+   localhost binding. Verify individual read-only selected bundle file mounts
+   under `/models`, GPU devices, `memlock`/IPC settings, selected overlay,
+   `--network=none`, dropped NET_ADMIN/NET_RAW, `no-new-privileges`, and the host
+   API relay address in the preview. No `-p` publishing should appear. Podman
    uses `keep-groups`; Docker uses `video` and `render`. The image's entrypoint
    must remain intact. Confirm `--pull=always` appears in the launch preview and
    the engine checks the registry even with a cached image. A failed pull must
@@ -102,9 +104,19 @@ on the development machine.
 4. From another terminal, query `http://127.0.0.1:8731/health` and
    `/v1/models`, then send one short chat request to `/v1/chat/completions`
    using the returned model ID. Record the startup precision message and
-   successful output. Only API port 8731 should be published, never engine
-   port 8730.
-5. Stop with Ctrl+C. Confirm `ai-toolbox-cockpit-halogen-server` is removed,
+   successful output. Also test streamed chat responses, concurrent requests,
+   client disconnects, and a large image request when validating vision later.
+   Only the host relay should listen on 8731; neither container port should be
+   published. Confirm the image provides `python3` for the exec stream helper.
+   Inspect effective mounts and network configuration. Inside the running
+   container, verify only loopback is available and attempted connections to
+   controlled Internet, LAN, host, and DNS endpoints fail over IPv4 and IPv6.
+   Verify a dedicated test file outside the selected bundle is not visible and
+   selected mounts reject writes. Test Podman and Docker separately. An occupied
+   host API port must fail startup without leaving a server container running.
+5. Stop with Ctrl+C, including during a streaming request. Confirm
+   `ai-toolbox-cockpit-halogen-server` is removed, the relay listener closes,
+   and its exec clients terminate. Also check cleanup after startup failure,
    reopen Cockpit, and confirm path/server settings persist. Restart and verify
    the same bundle serves without a download. Test the speed overlay only
    after the quality pair passes, as a separate case.

@@ -11,6 +11,26 @@ from .model_manager import get_bundle, incomplete_files
 CONTAINER_NAME = "ai-toolbox-cockpit-halogen-server"
 
 
+def _validated_engine_args(arguments: list[str]) -> list[str]:
+    """Only retain the reviewed GPU profile; reject isolation overrides."""
+    switches = {"--pull=always", "--ipc=host"}
+    values = {"--device": {"/dev/kfd", "/dev/dri"},
+              "--group-add": {"video", "render"},
+              "--security-opt": {"seccomp=unconfined"},
+              "--ulimit": {"memlock=-1:-1"}}
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in switches:
+            index += 1
+        elif (argument in values and index + 1 < len(arguments)
+              and arguments[index + 1] in values[argument]):
+            index += 2
+        else:
+            raise ValueError(f"Halogen isolation does not allow engine argument: {argument}")
+    return arguments
+
+
 def build_server_cmd(
     *, engine: str, image: str, engine_args: list[str], platform_id: str,
     models_dir: Path, bundle_id: str, host: str = "127.0.0.1", port: int = 8731,
@@ -33,10 +53,9 @@ def build_server_cmd(
     if host == "localhost":
         host = "127.0.0.1"
     try:
-        address = ipaddress.ip_address(host)
+        ipaddress.ip_address(host)
     except ValueError as error:
         raise ValueError("Host must be an IP address or localhost.") from error
-    host = f"[{address}]" if address.version == 6 else str(address)
     directory = models_dir.expanduser().resolve()
     if ":" in str(directory):
         raise ValueError("Models directory cannot contain ':' in a container volume mount.")
@@ -58,8 +77,14 @@ def build_server_cmd(
     if bundle.get("vision_tower"):
         environment["HALOGEN_VISION_TOWER"] = f"/models/{bundle['vision_tower']}"
     command = [engine, "run", "--rm", "-it", "--name", CONTAINER_NAME,
-               *upgrade_groups_for_podman(engine, engine_args),
-               "-p", f"{host}:{port}:{port}", "-v", f"{directory}:/models:ro"]
+               *upgrade_groups_for_podman(engine, _validated_engine_args(engine_args)),
+               "--network=none", "--cap-drop=NET_ADMIN", "--cap-drop=NET_RAW",
+               "--security-opt", "no-new-privileges"]
+    for item in bundle["files"]:
+        source = (directory / item["path"]).resolve(strict=True)
+        if not source.is_relative_to(directory) or ":" in str(source):
+            raise ValueError("Bundle files must stay inside the models directory and have mount-safe paths.")
+        command.extend(["-v", f"{source}:/models/{item['path']}:ro"])
     for key, value in environment.items():
         command.extend(["-e", f"{key}={value}"])
     return [*command, image]

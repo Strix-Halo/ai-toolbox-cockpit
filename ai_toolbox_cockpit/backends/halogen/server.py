@@ -37,6 +37,14 @@ class HalogenServerPanel(BackendServerPanel):
                 "This image runs directly in Podman/Docker and cannot be entered as a toolbox.",
                 classes="panel-copy",
             )
+            yield Static(
+                "Use at your own risk: Halogen is a third-party closed-source project and container, "
+                "so it is harder to audit than the open-source backends. Cockpit disables the "
+                "container's network and mounts only the selected model/tokenizer files read-only, "
+                "plus GPU devices. A host relay provides API access. This limits risk; it does not "
+                "remove it. The container still shares the host kernel and GPU driver.",
+                classes="panel-copy",
+            )
             for control, label in (("engine", "Engine"), ("image", "Image"), ("model", "Model / precision")):
                 with Horizontal(classes="inline-row"):
                     yield Label(label, id=f"halogen-{control}-label", classes="inline-label")
@@ -147,7 +155,10 @@ class HalogenServerPanel(BackendServerPanel):
             self.notify(str(error), severity="error", timeout=10)
             return
         self.app.push_screen(ConfirmModal(
-            f"Start Halogen Flash?\n\n{shlex.join(self._pending_command)}", yes_text="Start",
+            "Start third-party closed-source Halogen Flash? Use at your own risk.\n"
+            "No direct container network; selected bundle files mounted read-only.\n"
+            f"Host API relay: {values['host']}:{values['port']} -> container loopback.\n\n"
+            f"{shlex.join(self._pending_command)}", yes_text="Start",
         ), self._start_confirmed)
 
     def _start_confirmed(self, confirmed: bool) -> None:
@@ -157,4 +168,7 @@ class HalogenServerPanel(BackendServerPanel):
             self.notify("Could not save settings; using them for this session.", severity="warning")
         command = self._pending_command
         with self.app.suspend():
-            run_foreground_server(command, command[0], CONTAINER_NAME)
+            run_foreground_server(
+                command, command[0], CONTAINER_NAME,
+                isolated_api=(str(self._pending_settings["host"]), int(self._pending_settings["port"])),
+            )
