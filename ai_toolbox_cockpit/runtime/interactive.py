@@ -208,6 +208,9 @@ def build_create_command(
     if runtime.wrapper is InteractiveBackend.TOOLBOX:
         if runtime.engine is not ContainerEngine.PODMAN:
             raise ValueError("Toolbx requires Podman")
+        # Toolbx already creates its containers with --privileged, --ulimit host
+        # and --volume /dev:/dev:rslave, so host devices including InfiniBand are
+        # present inside the environment. There is nothing to pass through here.
         return ["toolbox", "create", "--image", image, name]
 
     args = adapt_nvidia_runtime_args(runtime.engine, list(engine_args))
