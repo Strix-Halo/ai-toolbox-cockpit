@@ -3,7 +3,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ai_toolbox_cockpit.backends.ds4.config import get_artifact_role, get_model_server_defaults
+from ai_toolbox_cockpit.backends.ds4.config import (
+    get_artifact_role,
+    get_model_server_defaults,
+    resolve_server_binary,
+)
 from ai_toolbox_cockpit.backends.ds4.server_runner import build_server_cmd
 
 
@@ -256,6 +260,62 @@ class Ds4CommandTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             with self.assertRaises(ValueError):
                 self.build(directory, role="Coordinator", tensor_parallel=True, transport="rdma")
+
+    def binary(self, command: list[str]) -> str:
+        return command[command.index("docker.io/example/ds4:latest") + 1]
+
+    def test_deepseek_v41_flash_tensor_parallel_worker_uses_the_ds4_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / "DeepSeek-V4.1-Flash-Q2.gguf"
+            model.touch()
+            worker = self.build(
+                directory,
+                model_path=str(model),
+                role="Worker",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+            )
+            coordinator = self.build(
+                directory,
+                model_path=str(model),
+                role="Coordinator",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+            )
+            standalone = self.build(directory, model_path=str(model))
+
+        self.assertEqual(self.binary(worker), "ds4")
+        self.assertEqual(self.binary(coordinator), "ds4-server")
+        self.assertEqual(self.binary(standalone), "ds4-server")
+
+    def test_tensor_parallel_worker_binary_override_is_family_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            other = Path(directory) / "DeepSeek-V4-Flash-Q4KExperts-F16HC.gguf"
+            other.touch()
+            unknown = Path(directory) / "untracked-model.gguf"
+            unknown.touch()
+            curated_worker = self.build(
+                directory, model_path=str(other), role="Worker", tensor_parallel=True
+            )
+            unknown_worker = self.build(
+                directory, model_path=str(unknown), role="Worker", tensor_parallel=True
+            )
+
+        self.assertEqual(self.binary(curated_worker), "ds4-server")
+        self.assertEqual(self.binary(unknown_worker), "ds4-server")
+
+    def test_resolve_server_binary_only_overrides_tensor_parallel_workers(self) -> None:
+        model = "DeepSeek-V4.1-Flash-Q2.gguf"
+
+        self.assertEqual(resolve_server_binary(model, "Worker", True), "ds4")
+        self.assertEqual(resolve_server_binary(model, "worker", True, "ds4-server"), "ds4")
+        self.assertEqual(resolve_server_binary(model, "Coordinator", True), "ds4-server")
+        self.assertEqual(resolve_server_binary(model, "Worker", False), "ds4-server")
+        self.assertEqual(resolve_server_binary(model, "Standalone", True), "ds4-server")
+        self.assertEqual(resolve_server_binary(model, "Worker", True, "ds4-custom"), "ds4")
+        self.assertEqual(resolve_server_binary("GLM-5.3-Flash-Q2.gguf", "Worker", True), "ds4-server")
 
     def test_builder_never_emits_rocm_flag(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

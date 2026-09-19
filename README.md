@@ -185,7 +185,9 @@ defaults to port `8000`.
 - **Coordinator/Worker:** selecting a distributed role reveals the tensor-parallel
   controls. `--tensor-parallel` is enabled, transport defaults to TCP, and
   choosing RoCE enables the RDMA device, port and GID-index fields. Cluster
-  experts stay resident; SSD streaming is not applied in distributed mode.
+  experts stay resident; SSD streaming is not applied in distributed mode. The
+  Worker role launches the `ds4` binary instead of the toolbox default
+  `ds4-server`; the coordinator keeps `ds4-server`.
 - The coordinator link address defaults to port `9911`; both hosts need matching
   builds, model and vision files, and context settings.
 

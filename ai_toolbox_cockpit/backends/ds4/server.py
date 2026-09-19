@@ -14,7 +14,13 @@ from ai_toolbox_cockpit.runtime.server_process import run_foreground_server
 from ai_toolbox_cockpit.settings import load_default_toolbox
 from ai_toolbox_cockpit.widgets import CockpitCheckbox, ConfirmModal, SearchableSelect
 
-from .config import get_artifact_role, get_model_artifact, get_model_server_defaults
+from .config import (
+    TENSOR_PARALLEL_WORKER_BINARIES,
+    get_artifact_role,
+    get_model_artifact,
+    get_model_family,
+    get_model_server_defaults,
+)
 from .model_manager import scan_local_models
 from .server_runner import build_server_cmd
 
@@ -152,6 +158,7 @@ class Ds4ServerPanel(BackendServerPanel):
                     with Vertical(classes="compact-field"):
                         yield Label("RDMA GID index", id="ds4-rdma-gid-label", classes="field-label")
                         yield Input(placeholder="For example, 1", disabled=True, id="ds4-rdma-gid")
+                yield Static("", id="ds4-tp-note", classes="panel-copy")
             with Horizontal(classes="extra-args-row"):
                 yield Label("Extra args", id="ds4-extra-args-label", classes="inline-label")
                 yield TextArea(
@@ -414,6 +421,29 @@ class Ds4ServerPanel(BackendServerPanel):
         layers.disabled = tensor_active
         if tensor_active:
             layers.value = ""
+        self._sync_tensor_parallel_binary_note(tensor_active)
+
+    def _sync_tensor_parallel_binary_note(self, tensor_active: bool) -> None:
+        role = self.query_one("#ds4-role", SearchableSelect).value or "Standalone"
+        worker_binary = (
+            TENSOR_PARALLEL_WORKER_BINARIES.get(get_model_family(self._current_model_path), "")
+            if tensor_active and role.lower() == "worker"
+            else ""
+        )
+        note = self.query_one("#ds4-tp-note", Static)
+        if not worker_binary:
+            note.update("")
+            return
+        note.update(
+            f"Tensor-parallel workers for this model launch {worker_binary} "
+            f"instead of {self._toolbox_server_binary()}."
+        )
+
+    def _toolbox_server_binary(self) -> str:
+        toolbox = self.app.toolbox_catalog.toolboxes.get(
+            self.query_one("#ds4-image", SearchableSelect).value
+        )
+        return (toolbox.server_binary if toolbox else "") or "ds4-server"
 
     @on(Checkbox.Changed, "#ds4-tensor-parallel")
     def tensor_parallel_toggled(self) -> None:

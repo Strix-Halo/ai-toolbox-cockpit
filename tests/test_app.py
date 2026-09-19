@@ -1283,6 +1283,20 @@ class AppMountTests(IsolatedAsyncioTestCase):
                 self.assertEqual(app.query_one("#ds4-rdma-device", Input).value, "rocep194s0")
                 self.assertEqual(app.query_one("#ds4-rdma-port", Input).value, "1")
                 self.assertEqual(app.query_one("#ds4-rdma-gid", Input).value, "1")
+                self.assertEqual(str(app.query_one("#ds4-tp-note", Static).content), "")
+
+                role.value = "Worker"
+                await pilot.pause()
+
+                self.assertIn(
+                    "launch ds4 instead of ds4-server",
+                    str(app.query_one("#ds4-tp-note", Static).content),
+                )
+
+                app.query_one("#ds4-tensor-parallel", Checkbox).value = False
+                await pilot.pause()
+
+                self.assertEqual(str(app.query_one("#ds4-tp-note", Static).content), "")
 
     async def test_vllm_server_controls_have_persistent_labels(self) -> None:
         expected_labels = {

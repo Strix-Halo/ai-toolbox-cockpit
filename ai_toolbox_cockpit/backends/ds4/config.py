@@ -4,6 +4,12 @@ from pathlib import Path
 
 from ai_toolbox_cockpit.catalog import load_model_catalog
 
+# Tensor-parallel workers for these families are served by a different CLI than the
+# toolbox default. DeepSeek V4.1 Flash workers run `ds4`; every other role and
+# family keeps the binary declared by the toolbox profile.
+TENSOR_PARALLEL_WORKER_BINARIES: dict[str, str] = {"deepseek-v4.1-flash": "ds4"}
+DEFAULT_SERVER_BINARY = "ds4-server"
+
 
 def load_models() -> dict:
     backend = load_model_catalog().backends["ds4"]
@@ -22,6 +28,23 @@ def get_model_artifact(model_path: str) -> dict:
         if model.get("filename") == filename:
             return model
     return {}
+
+
+def get_model_family(model_path: str) -> str:
+    """Return the curated family for a local artifact, or an empty string."""
+    return str(get_model_artifact(model_path).get("family", ""))
+
+
+def resolve_server_binary(
+    model_path: str,
+    role: str,
+    tensor_parallel: bool,
+    default_binary: str = DEFAULT_SERVER_BINARY,
+) -> str:
+    """Return the server binary for a role, honouring family-specific TP workers."""
+    if not tensor_parallel or str(role).lower() != "worker":
+        return default_binary
+    return TENSOR_PARALLEL_WORKER_BINARIES.get(get_model_family(model_path), default_binary)
 
 
 def get_artifact_role(model_path: str) -> str:
