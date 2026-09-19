@@ -96,7 +96,7 @@ Every server endpoint has its own source file and pure command builder under `ai
 | Backend | Controls and defaults |
 | --- | --- |
 | llama.cpp | Local GGUF, image/engine, context, GPU layers, load mode, flash attention, KV-cache type, API key, GPU visibility, inference profiles, vision projector, MTP, and extra `llama-server` arguments |
-| DS4 | Exact local GGUF, context, graph/distributed prefill, disk KV cache, SSD expert streaming, embedded MTP or external MTP path, compatible vision encoder, and standalone/coordinator/worker roles |
+| DS4 | Exact local GGUF, context, graph/distributed prefill, disk KV cache, SSD expert streaming, embedded MTP or external MTP path, compatible vision encoder, standalone/coordinator/worker roles, and tensor-parallel TCP/RoCE transport for DeepSeek V4.1 Flash Q2 |
 | vLLM | Hugging Face repository, tensor parallelism, concurrency, context, GPU utilisation, dtype, eager mode, API key, attention backend, and persistent HF/vLLM/Triton/AITER caches |
 | ComfyUI | Model/input/output/user paths, host/port, BF16 VAE, GPU-only mode, mmap/smart-memory behavior, and cache mode |
 | Halogen Flash (Strix Halo only) | Qwen3.8-Flash-Next W4B quality/speed bundle, model directory, image/engine, host/port, native request context, KV pool positions, concurrency, and prompt cache |
@@ -170,6 +170,24 @@ is the tested runtime; Docker command generation is supported but GPU validation
 is pending. More sequences or changed memory settings are outside the tested
 64 GB profile. Temperature, output length and thinking are per-request settings.
 Vision recognized test shapes but did not always return strict unfenced JSON.
+
+### DeepSeek V4.1 Flash Q2 on Strix Halo
+
+Tested configuration: **DeepSeek V4.1 Flash Q2, AMD Strix Halo / gfx1151**. The
+model is catalogued with the tested 262144 context, the matching
+`DeepSeek-V4.1-Flash-Vision.gguf` encoder, and SSD expert streaming with a
+`92GB` routed-expert cache. Select **Server Mode → DwarfStar (ds4)** and the Q2
+model; the compatible vision encoder is offered automatically and the API
+defaults to port `8000`.
+
+- **Standalone:** SSD streaming starts enabled with the `92GB` cache. Clear it to
+  keep the experts fully resident when the host has enough RAM.
+- **Coordinator/Worker:** selecting a distributed role reveals the tensor-parallel
+  controls. `--tensor-parallel` is enabled, transport defaults to TCP, and
+  choosing RoCE enables the RDMA device, port and GID-index fields. Cluster
+  experts stay resident; SSD streaming is not applied in distributed mode.
+- The coordinator link address defaults to port `9911`; both hosts need matching
+  builds, model and vision files, and context settings.
 
 ## Halogen Flash on Strix Halo
 

@@ -1227,6 +1227,63 @@ class AppMountTests(IsolatedAsyncioTestCase):
                 await pilot.pause()
                 self.assertEqual(vision.value, encoder["path"])
 
+    async def test_ds4_deepseek_v41_flash_q2_exposes_strix_halo_configuration(self) -> None:
+        q2 = {
+            "name": "DeepSeek-V4.1-Flash-Q2.gguf",
+            "path": "/models/DeepSeek-V4.1-Flash-Q2.gguf",
+        }
+        vision = {
+            "name": "DeepSeek-V4.1-Flash-Vision.gguf",
+            "path": "/models/DeepSeek-V4.1-Flash-Vision.gguf",
+        }
+        with (
+            patch("ai_toolbox_cockpit.views.toolboxes.ToolboxesView.refresh_installed", return_value=None),
+            patch("ai_toolbox_cockpit.app.AiToolboxCockpitApp.check_application_update", return_value=None),
+            patch("ai_toolbox_cockpit.app.available_update", return_value=None),
+            patch("ai_toolbox_cockpit.backends.llama_cpp.server.scan_local_models", return_value=[]),
+            patch(
+                "ai_toolbox_cockpit.backends.ds4.server.scan_local_models",
+                return_value=[q2, vision],
+            ),
+        ):
+            app = AiToolboxCockpitApp()
+            async with app.run_test(size=(200, 70)) as pilot:
+                app.query_one(TabbedContent).active = "tab-servers"
+                app.query_one("#server-backend-select", SearchableSelect).value = "ds4"
+                await pilot.pause()
+
+                self.assertEqual(app.query_one("#ds4-model", SearchableSelect).value, q2["path"])
+                self.assertEqual(app.query_one("#ds4-context", Input).value, "262144")
+                self.assertTrue(app.query_one("#ds4-ssd-enabled", CockpitCheckbox).value)
+                self.assertEqual(app.query_one("#ds4-ssd-experts", Input).value, "92GB")
+                vision_select = app.query_one("#ds4-vision", SearchableSelect)
+                self.assertFalse(vision_select.disabled)
+                vision_select.value = vision["path"]
+                await pilot.pause()
+                self.assertEqual(vision_select.value, vision["path"])
+                self.assertEqual(app.query_one("#ds4-tp-zone", Vertical).styles.display, "none")
+
+                role = app.query_one("#ds4-role", SearchableSelect)
+                role.value = "Coordinator"
+                await pilot.pause()
+
+                self.assertEqual(app.query_one("#ds4-tp-zone", Vertical).styles.display, "block")
+                self.assertTrue(app.query_one("#ds4-tensor-parallel", Checkbox).value)
+                self.assertEqual(app.query_one("#ds4-transport", SearchableSelect).value, "tcp")
+                self.assertEqual(app.query_one("#ds4-context", Input).value, "262144")
+                self.assertEqual(app.query_one("#ds4-layers", Input).value, "")
+                self.assertTrue(app.query_one("#ds4-layers", Input).disabled)
+                self.assertTrue(app.query_one("#ds4-rdma-device", Input).disabled)
+
+                transport = app.query_one("#ds4-transport", SearchableSelect)
+                transport.value = "rdma"
+                await pilot.pause()
+
+                self.assertFalse(app.query_one("#ds4-rdma-device", Input).disabled)
+                self.assertEqual(app.query_one("#ds4-rdma-device", Input).value, "rocep194s0")
+                self.assertEqual(app.query_one("#ds4-rdma-port", Input).value, "1")
+                self.assertEqual(app.query_one("#ds4-rdma-gid", Input).value, "1")
+
     async def test_vllm_server_controls_have_persistent_labels(self) -> None:
         expected_labels = {
             "vllm-tp": ("vllm-tp-label", "Tensor parallel"),

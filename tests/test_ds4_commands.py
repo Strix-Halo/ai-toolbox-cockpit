@@ -160,6 +160,109 @@ class Ds4CommandTests(unittest.TestCase):
         filename = "DeepSeek-V4-Flash-Layers37-42Q4KExperts-OtherExpertLayersIQ2XXSGateUp-Q2KDown-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-fixed-0731.gguf"
         self.assertEqual(get_model_server_defaults(filename)["prefill_chunk"], 2048)
 
+    def test_deepseek_v41_flash_q2_defaults_match_strix_halo_configuration(self) -> None:
+        defaults = get_model_server_defaults("DeepSeek-V4.1-Flash-Q2.gguf")
+
+        self.assertEqual(defaults["standalone_ctx"], 262144)
+        self.assertEqual(defaults["distributed_ctx"], 262144)
+        self.assertTrue(defaults["ssd_streaming"])
+        self.assertEqual(defaults["ssd_experts"], "92GB")
+        self.assertTrue(defaults["tensor_parallel"])
+        self.assertEqual(defaults["distributed_transport"], "tcp")
+        self.assertEqual(defaults["distributed_port"], 9911)
+        self.assertEqual(defaults["rdma_device"], "rocep194s0")
+        self.assertEqual(defaults["rdma_port"], 1)
+        self.assertEqual(defaults["rdma_gid_index"], 1)
+
+    def test_deepseek_v41_flash_q2_standalone_ssd_streaming_recipe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = self.build(directory, ctx=262144, ssd_enabled=True, ssd_experts="92GB")
+
+        self.assertEqual(command[command.index("--ctx") + 1], "262144")
+        self.assertIn("--ssd-streaming", command)
+        self.assertEqual(command[command.index("--ssd-streaming-cache-experts") + 1], "92GB")
+        self.assertNotIn("--tensor-parallel", command)
+        self.assertNotIn("--transport", command)
+
+    def test_deepseek_v41_flash_q2_standalone_resident_recipe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = self.build(directory, ctx=262144)
+
+        self.assertNotIn("--ssd-streaming", command)
+        self.assertNotIn("--ssd-streaming-cache-experts", command)
+
+    def test_deepseek_v41_flash_q2_tensor_parallel_tcp_recipe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            coordinator = self.build(
+                directory,
+                role="Coordinator",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+                peer_default_port="9911",
+            )
+            worker = self.build(
+                directory,
+                role="Worker",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+                peer_default_port="9911",
+            )
+
+        self.assertIn("--tensor-parallel", coordinator)
+        self.assertEqual(coordinator[coordinator.index("--role") + 1], "coordinator")
+        self.assertEqual(
+            coordinator[coordinator.index("--listen") + 1:coordinator.index("--listen") + 3],
+            ["192.168.100.1", "9911"],
+        )
+        self.assertEqual(coordinator[coordinator.index("--transport") + 1], "tcp")
+        self.assertNotIn("--layers", coordinator)
+        self.assertNotIn("--ssd-streaming", coordinator)
+        self.assertEqual(worker[worker.index("--role") + 1], "worker")
+        self.assertEqual(
+            worker[worker.index("--coordinator") + 1:worker.index("--coordinator") + 3],
+            ["192.168.100.1", "9911"],
+        )
+        self.assertEqual(worker[worker.index("--transport") + 1], "tcp")
+
+    def test_deepseek_v41_flash_q2_tensor_parallel_roce_recipe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            coordinator = self.build(
+                directory,
+                role="Coordinator",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="rdma",
+                rdma_device="rocep194s0",
+                rdma_port="1",
+                rdma_gid_index="1",
+                peer_default_port="9911",
+            )
+
+        self.assertEqual(coordinator[coordinator.index("--transport") + 1], "rdma")
+        self.assertEqual(coordinator[coordinator.index("--rdma-device") + 1], "rocep194s0")
+        self.assertEqual(coordinator[coordinator.index("--rdma-port") + 1], "1")
+        self.assertEqual(coordinator[coordinator.index("--rdma-gid-index") + 1], "1")
+
+    def test_tensor_parallel_omits_layer_split(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = self.build(directory, role="Coordinator", layers="0:21", tensor_parallel=True)
+
+        self.assertIn("--tensor-parallel", command)
+        self.assertNotIn("--layers", command)
+
+    def test_roce_transport_requires_an_rdma_device(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(ValueError):
+                self.build(directory, role="Coordinator", tensor_parallel=True, transport="rdma")
+
+    def test_builder_never_emits_rocm_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = self.build(directory, ctx=262144, ssd_enabled=True, ssd_experts="92GB")
+
+        self.assertNotIn("--rocm", command)
+
 
 if __name__ == "__main__":
     unittest.main()

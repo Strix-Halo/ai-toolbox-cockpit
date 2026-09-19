@@ -240,6 +240,29 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(q2["size_gb"], 137.1)
         self.assertEqual(q4["size_gb"], 165.11)
 
+    def test_ds4_catalog_contains_deepseek_v41_flash_q2_strix_halo_defaults(self) -> None:
+        entries = {
+            entry["filename"]: entry
+            for entry in load_model_catalog().backends["ds4"].entries
+        }
+
+        q2 = entries["DeepSeek-V4.1-Flash-Q2.gguf"]
+        vision = entries["DeepSeek-V4.1-Flash-Vision.gguf"]
+        self.assertEqual(q2["family"], "deepseek-v4.1-flash")
+        self.assertEqual(vision["artifact_role"], "vision_encoder")
+        self.assertEqual(vision["family"], "deepseek-v4.1-flash")
+        defaults = q2["server_defaults"]
+        self.assertEqual(defaults["standalone_ctx"], 262144)
+        self.assertEqual(defaults["distributed_ctx"], 262144)
+        self.assertTrue(defaults["ssd_streaming"])
+        self.assertEqual(defaults["ssd_experts"], "92GB")
+        self.assertTrue(defaults["tensor_parallel"])
+        self.assertEqual(defaults["distributed_transport"], "tcp")
+        self.assertEqual(defaults["distributed_port"], 9911)
+        self.assertEqual(defaults["rdma_device"], "rocep194s0")
+        self.assertEqual(defaults["rdma_port"], 1)
+        self.assertEqual(defaults["rdma_gid_index"], 1)
+
     def test_vllm_catalog_contains_current_toolbox_models(self) -> None:
         entries = {
             entry["repo"]: entry

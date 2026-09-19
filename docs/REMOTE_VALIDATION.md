@@ -46,6 +46,7 @@ Prerequisite: one exact catalogued DS4 GGUF already present in the configured DS
 3. Enable disk KV with a dedicated empty `ds4-kv` directory and a small test budget. Confirm writes stay under that directory.
 4. Validate SSD streaming separately, first with the model's maintained defaults.
 5. Only after standalone passes, use two hosts for coordinator/worker mode. Verify host networking, role, layer ranges, peer address, and distributed prefill settings in both previews before launch.
+6. For the catalogued DeepSeek V4.1 Flash Q2, validate the tensor-parallel profile separately. Confirm the standalone default enables SSD streaming with a `92GB` routed-expert cache, the vision encoder is offered, and clearing SSD streaming leaves experts resident. Then select Coordinator/Worker and verify `--tensor-parallel`, TCP transport, the `9911` link port, and, for RoCE, `--rdma-device`, `--rdma-port` and `--rdma-gid-index` in both previews. Confirm no `--layers` or SSD flags appear and that RoCE without a device is rejected.
 
 Do not treat distributed mode as validated from command construction alone.
 

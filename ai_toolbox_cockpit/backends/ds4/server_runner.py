@@ -8,14 +8,14 @@ KV_DISK_CONTAINER_DIR = "/var/cache/ds4-kv"
 MXFP4_TILE4_ENV = "DS4_ROCM_ENABLE_MXFP4_TILE4=1"
 MXFP4_DOWN_RGROUP_ENV = "DS4_ROCM_MXFP4_DOWN_RGROUP=4"
 
-def _parse_peer_addr(peer_addr: str) -> tuple[str, str]:
+def _parse_peer_addr(peer_addr: str, default_port: str = "8081") -> tuple[str, str]:
     """Parse peer address input into (ip, port). Supports 'IP PORT', 'IP:PORT', or bare 'IP'."""
     if ":" in peer_addr and len(peer_addr.split()) == 1:
         parts = peer_addr.split(":")
     else:
         parts = peer_addr.split()
     ip = parts[0]
-    port = parts[1] if len(parts) > 1 else "8081"
+    port = parts[1] if len(parts) > 1 else default_port
     return ip, port
 
 def _clean_engine_args(engine_args: list[str]) -> list[str]:
@@ -50,7 +50,13 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
                      dspark_path: str = "",
                      dspark_confidence: float = 0.7,
                      vision_path: str = "",
-                     mtp_enabled: bool = False) -> list[str]:
+                     mtp_enabled: bool = False,
+                     tensor_parallel: bool = False,
+                     transport: str = "",
+                     rdma_device: str = "",
+                     rdma_port: str = "",
+                     rdma_gid_index: str = "",
+                     peer_default_port: str = "8081") -> list[str]:
     
     models_dir = str(get_models_dir())
     engine_args = _clean_engine_args(toolbox_config.get("args", []))
@@ -68,6 +74,10 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
         raise ValueError("DSpark is available only in standalone mode")
     if not 0.0 <= dspark_confidence <= 1.0:
         raise ValueError("DSpark confidence must be between 0 and 1")
+    if transport not in {"", "tcp", "rdma"}:
+        raise ValueError("Transport must be tcp or rdma")
+    if transport == "rdma" and not rdma_device.strip():
+        raise ValueError("RoCE transport requires an RDMA device")
 
     docker_args = [engine, "run", "--rm", "-it", "--name", "ds4-cockpit-server"]
     docker_args.extend(engine_args)
@@ -154,11 +164,13 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
         server_args.extend(["--mtp-model", f"/models/{mtp_rel}"])
         
     if is_multinode:
+        if tensor_parallel:
+            server_args.append("--tensor-parallel")
         server_args.extend(["--role", role.lower()])
-        if layers:
+        if layers and not tensor_parallel:
             server_args.extend(["--layers", layers])
         if peer_addr:
-            coord_ip, coord_port = _parse_peer_addr(peer_addr)
+            coord_ip, coord_port = _parse_peer_addr(peer_addr, peer_default_port)
             if role.lower() == "coordinator":
                 server_args.extend(["--listen", coord_ip, coord_port])
                 if dist_prefill_chunk is not None:
@@ -167,6 +179,14 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
                     server_args.extend(["--dist-prefill-window", str(dist_prefill_window)])
             elif role.lower() == "worker":
                 server_args.extend(["--coordinator", coord_ip, coord_port])
+        if tensor_parallel and transport:
+            server_args.extend(["--transport", transport])
+            if transport == "rdma":
+                server_args.extend(["--rdma-device", rdma_device.strip()])
+                if rdma_port.strip():
+                    server_args.extend(["--rdma-port", rdma_port.strip()])
+                if rdma_gid_index.strip():
+                    server_args.extend(["--rdma-gid-index", rdma_gid_index.strip()])
 
     if custom_args:
         server_args.extend(shlex.split(custom_args))

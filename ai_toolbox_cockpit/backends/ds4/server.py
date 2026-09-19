@@ -29,6 +29,8 @@ class Ds4ServerPanel(BackendServerPanel):
         self._dspark_support_models: list[dict[str, str]] = []
         self._vision_encoders: list[dict[str, str]] = []
         self._pending_command: list[str] = []
+        self._model_defaults: dict = {}
+        self._tensor_parallel_available = False
 
     def compose(self) -> ComposeResult:
         with VerticalScroll():
@@ -131,6 +133,25 @@ class Ds4ServerPanel(BackendServerPanel):
                 with Vertical(classes="compact-field"):
                     yield Label("Distributed prefill window", id="ds4-dist-window-label", classes="field-label")
                     yield Input(placeholder="Auto", disabled=True, id="ds4-dist-window")
+            with Vertical(id="ds4-tp-zone", classes="model-zone"):
+                yield Label("Tensor-parallel distributed", classes="zone-title")
+                with Horizontal(classes="options-row"):
+                    yield CockpitCheckbox(
+                        "Tensor parallel (--tensor-parallel)", value=False, id="ds4-tensor-parallel"
+                    )
+                with Horizontal(classes="inline-row"):
+                    yield Label("Transport", id="ds4-transport-label", classes="inline-label")
+                    yield SearchableSelect("TCP or RoCE", id="ds4-transport")
+                with Horizontal(classes="compact-fields"):
+                    with Vertical(classes="compact-field"):
+                        yield Label("RDMA device", id="ds4-rdma-device-label", classes="field-label")
+                        yield Input(placeholder="For example, rocep194s0", disabled=True, id="ds4-rdma-device")
+                    with Vertical(classes="compact-field"):
+                        yield Label("RDMA port", id="ds4-rdma-port-label", classes="field-label")
+                        yield Input(placeholder="For example, 1", disabled=True, id="ds4-rdma-port")
+                    with Vertical(classes="compact-field"):
+                        yield Label("RDMA GID index", id="ds4-rdma-gid-label", classes="field-label")
+                        yield Input(placeholder="For example, 1", disabled=True, id="ds4-rdma-gid")
             with Horizontal(classes="extra-args-row"):
                 yield Label("Extra args", id="ds4-extra-args-label", classes="inline-label")
                 yield TextArea(
@@ -152,6 +173,10 @@ class Ds4ServerPanel(BackendServerPanel):
         role = self.query_one("#ds4-role", SearchableSelect)
         role.set_options([(value, value) for value in ("Standalone", "Coordinator", "Worker")])
         role.value = "Standalone"
+        transport = self.query_one("#ds4-transport", SearchableSelect)
+        transport.set_options([("TCP", "tcp"), ("RoCE", "rdma")])
+        transport.value = "tcp"
+        self.query_one("#ds4-tp-zone", Vertical).styles.display = "none"
         self.refresh_platform(self.platform_id)
         self.refresh_models()
 
@@ -241,6 +266,7 @@ class Ds4ServerPanel(BackendServerPanel):
         self._current_model_path = model
         role = self.query_one("#ds4-role", SearchableSelect).value or "Standalone"
         defaults = get_model_server_defaults(model)
+        self._model_defaults = defaults
         self.query_one("#ds4-prefill", Input).value = str(defaults.get("prefill_chunk", ""))
         coordinator = role == "Coordinator"
         if coordinator:
@@ -269,6 +295,7 @@ class Ds4ServerPanel(BackendServerPanel):
         self._refresh_vision_control(model, model_changed)
         if model_changed:
             self.query_one("#ds4-mtp-enabled", Checkbox).value = False
+        self._refresh_tensor_parallel_controls(defaults, role, model_changed)
         self._refresh_dspark_controls(defaults, role, model_changed)
 
     def _refresh_mxfp4_controls(self, model_path: str, model_changed: bool) -> None:
@@ -350,6 +377,51 @@ class Ds4ServerPanel(BackendServerPanel):
         if active:
             ssd.value = False
         ssd.disabled = active
+
+    def _refresh_tensor_parallel_controls(self, defaults: dict, role: str, model_changed: bool) -> None:
+        supported = bool(defaults.get("tensor_parallel", False))
+        self._tensor_parallel_available = supported and role != "Standalone"
+        zone = self.query_one("#ds4-tp-zone", Vertical)
+        zone.styles.display = "block" if self._tensor_parallel_available else "none"
+        tensor = self.query_one("#ds4-tensor-parallel", Checkbox)
+        tensor.disabled = not self._tensor_parallel_available
+        if model_changed:
+            tensor.value = supported
+        elif not supported:
+            tensor.value = False
+        transport = self.query_one("#ds4-transport", SearchableSelect)
+        if model_changed:
+            transport.value = str(defaults.get("distributed_transport", "tcp"))
+        device = self.query_one("#ds4-rdma-device", Input)
+        port = self.query_one("#ds4-rdma-port", Input)
+        gid = self.query_one("#ds4-rdma-gid", Input)
+        if model_changed:
+            device.value = str(defaults.get("rdma_device", ""))
+            port.value = str(defaults.get("rdma_port", ""))
+            gid.value = str(defaults.get("rdma_gid_index", ""))
+        self._sync_transport_controls()
+
+    def _sync_transport_controls(self) -> None:
+        available = self._tensor_parallel_available
+        tensor = self.query_one("#ds4-tensor-parallel", Checkbox)
+        transport = self.query_one("#ds4-transport", SearchableSelect)
+        tensor_active = available and tensor.value
+        transport.disabled = not tensor_active
+        rdma_active = tensor_active and transport.value == "rdma"
+        for control_id in ("ds4-rdma-device", "ds4-rdma-port", "ds4-rdma-gid"):
+            self.query_one(f"#{control_id}", Input).disabled = not rdma_active
+        layers = self.query_one("#ds4-layers", Input)
+        layers.disabled = tensor_active
+        if tensor_active:
+            layers.value = ""
+
+    @on(Checkbox.Changed, "#ds4-tensor-parallel")
+    def tensor_parallel_toggled(self) -> None:
+        self._sync_transport_controls()
+
+    @on(SearchableSelect.Changed, "#ds4-transport")
+    def transport_changed(self) -> None:
+        self._sync_transport_controls()
 
     @on(Checkbox.Changed, "#ds4-kv-enabled")
     def kv_toggled(self, event: Checkbox.Changed) -> None:
@@ -441,6 +513,26 @@ class Ds4ServerPanel(BackendServerPanel):
         toolbox = self.app.toolbox_catalog.toolboxes[toolbox_id]
         profile = self.app.toolbox_catalog.runtime_profiles[toolbox.runtime_profile]
         role = self.query_one("#ds4-role", SearchableSelect).value or "Standalone"
+        tensor_parallel = (
+            self._tensor_parallel_available
+            and self.query_one("#ds4-tensor-parallel", Checkbox).value
+        )
+        transport = (
+            self.query_one("#ds4-transport", SearchableSelect).value or ""
+        ) if tensor_parallel else ""
+        rdma_device = self.query_one("#ds4-rdma-device", Input).value.strip()
+        rdma_port = self.query_one("#ds4-rdma-port", Input).value.strip()
+        rdma_gid_index = self.query_one("#ds4-rdma-gid", Input).value.strip()
+        if role != "Standalone" and transport == "rdma":
+            if not rdma_device:
+                self.notify("RoCE transport requires an RDMA device.", severity="error")
+                return
+            if rdma_port and not rdma_port.isdigit():
+                self.notify("RDMA port must be a positive integer.", severity="error")
+                return
+            if rdma_gid_index and not rdma_gid_index.isdigit():
+                self.notify("RDMA GID index must be a non-negative integer.", severity="error")
+                return
         self._pending_command = build_server_cmd(
             engine, toolbox.image, model, int(context),
             self.query_one("#ds4-host", Input).value,
@@ -465,6 +557,12 @@ class Ds4ServerPanel(BackendServerPanel):
             dspark_confidence=dspark_confidence,
             vision_path=self.query_one("#ds4-vision", SearchableSelect).value,
             mtp_enabled=self.query_one("#ds4-mtp-enabled", Checkbox).value,
+            tensor_parallel=tensor_parallel,
+            transport=transport,
+            rdma_device=rdma_device,
+            rdma_port=rdma_port,
+            rdma_gid_index=rdma_gid_index,
+            peer_default_port=str(self._model_defaults.get("distributed_port", 8081)),
         )
         self.app.push_screen(
             ConfirmModal(f"Start DwarfStar (ds4) server?\n\n{shlex.join(self._pending_command)}", yes_text="Start"),

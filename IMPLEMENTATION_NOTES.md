@@ -1,5 +1,9 @@
 # Implementation notes
 
+## 2026-09-19 — DeepSeek V4.1 Flash Q2 tensor-parallel transport and SSD defaults
+
+DwarfStar Server Mode now exposes the tested DeepSeek V4.1 Flash Q2 configuration on Strix Halo. The model's catalogue `server_defaults` set a 262144 context, enable SSD streaming with a `92GB` routed-expert cache, and declare tensor-parallel TCP/RoCE defaults (`--tensor-parallel`, `--transport`, `--rdma-device`, `--rdma-port`, `--rdma-gid-index`, link port `9911`). Selecting Coordinator or Worker reveals a tensor-parallel zone; selecting RoCE enables the RDMA fields. The command builder emits `--tensor-parallel` and `--transport` only for that distributed profile, omits the pipeline `--layers` split when tensor parallelism is active, and rejects RoCE without an RDMA device. Standalone keeps the existing isolated port-mapped path; clearing SSD streaming leaves experts resident. Catalog, command, and headless UI tests cover the defaults, both transports, the resident/SSD choices, and the absence of a `--rocm` flag.
+
 ## 2026-08-11 — redundant Server Mode support row removed
 
 The Server Mode line listing the selected platform followed by `llama.cpp: supported`, `vLLM: supported`, `ComfyUI: supported`, and `DS4: supported` duplicated the available inference-engine choices and consumed vertical space. The widget and its status-building code have been removed. Platform changes still propagate to every backend panel so image filtering and backend-specific availability continue to work.
