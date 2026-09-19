@@ -1,6 +1,6 @@
 import os
 import shlex
-from .config import resolve_server_binary
+from .config import is_tensor_parallel_cli_worker, resolve_server_binary
 from .model_manager import get_models_dir
 from ai_toolbox_cockpit.runtime.engines import adapt_nvidia_runtime_args
 from ai_toolbox_cockpit.runtime.toolboxes import upgrade_groups_for_podman
@@ -69,6 +69,9 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
         tensor_parallel,
         toolbox_config.get("server_binary", "ds4-server"),
     )
+    # The ds4 CLI worker has no HTTP listener, so --host/--port stay with the
+    # ds4-server daemon; passing them makes ds4 exit with "unknown option".
+    cli_worker = is_tensor_parallel_cli_worker(model_path, role, tensor_parallel)
     
     is_multinode = role and role != "Standalone"
 
@@ -126,13 +129,9 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
     rel_path = os.path.relpath(model_path, models_dir)
     inner_model_path = f"/models/{rel_path}"
 
-    server_args = [
-        server_binary,
-        "-m", inner_model_path,
-        "--ctx", str(ctx),
-        "--host", "0.0.0.0",
-        "--port", str(port)
-    ]
+    server_args = [server_binary, "-m", inner_model_path, "--ctx", str(ctx)]
+    if not cli_worker:
+        server_args.extend(["--host", "0.0.0.0", "--port", str(port)])
 
     if vision_path:
         vision_rel = os.path.relpath(vision_path, models_dir)

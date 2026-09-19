@@ -35,6 +35,18 @@ def get_model_family(model_path: str) -> str:
     return str(get_model_artifact(model_path).get("family", ""))
 
 
+def is_tensor_parallel_cli_worker(model_path: str, role: str, tensor_parallel: bool) -> bool:
+    """True when the role runs the plain ds4 CLI instead of the ds4-server daemon.
+
+    The ds4 CLI has no HTTP listener, so it takes no --host/--port options.
+    """
+    return (
+        bool(tensor_parallel)
+        and str(role).lower() == "worker"
+        and get_model_family(model_path) in TENSOR_PARALLEL_WORKER_BINARIES
+    )
+
+
 def resolve_server_binary(
     model_path: str,
     role: str,
@@ -42,9 +54,9 @@ def resolve_server_binary(
     default_binary: str = DEFAULT_SERVER_BINARY,
 ) -> str:
     """Return the server binary for a role, honouring family-specific TP workers."""
-    if not tensor_parallel or str(role).lower() != "worker":
-        return default_binary
-    return TENSOR_PARALLEL_WORKER_BINARIES.get(get_model_family(model_path), default_binary)
+    if is_tensor_parallel_cli_worker(model_path, role, tensor_parallel):
+        return TENSOR_PARALLEL_WORKER_BINARIES[get_model_family(model_path)]
+    return default_binary
 
 
 def get_artifact_role(model_path: str) -> str:

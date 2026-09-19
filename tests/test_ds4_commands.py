@@ -6,6 +6,7 @@ from unittest.mock import patch
 from ai_toolbox_cockpit.backends.ds4.config import (
     get_artifact_role,
     get_model_server_defaults,
+    is_tensor_parallel_cli_worker,
     resolve_server_binary,
 )
 from ai_toolbox_cockpit.backends.ds4.server_runner import build_server_cmd
@@ -289,6 +290,74 @@ class Ds4CommandTests(unittest.TestCase):
         self.assertEqual(self.binary(worker), "ds4")
         self.assertEqual(self.binary(coordinator), "ds4-server")
         self.assertEqual(self.binary(standalone), "ds4-server")
+
+    def test_ds4_cli_worker_is_not_given_http_options(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / "DeepSeek-V4.1-Flash-Q2.gguf"
+            model.touch()
+            worker = self.build(
+                directory,
+                model_path=str(model),
+                role="Worker",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+            )
+            coordinator = self.build(
+                directory,
+                model_path=str(model),
+                role="Coordinator",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+            )
+
+        self.assertNotIn("--host", worker)
+        self.assertNotIn("--port", worker)
+        self.assertEqual(coordinator[coordinator.index("--host") + 1], "0.0.0.0")
+        self.assertEqual(coordinator[coordinator.index("--port") + 1], "8000")
+
+    def test_ds4_cli_worker_matches_the_documented_recipe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            model = Path(directory) / "DeepSeek-V4.1-Flash-Q2.gguf"
+            vision = Path(directory) / "DeepSeek-V4.1-Flash-Vision.gguf"
+            model.touch()
+            vision.touch()
+            worker = self.build(
+                directory,
+                model_path=str(model),
+                ctx=262144,
+                role="Worker",
+                peer_addr="192.168.100.1",
+                tensor_parallel=True,
+                transport="tcp",
+                vision_path=str(vision),
+                peer_default_port="9911",
+            )
+
+        self.assertEqual(
+            worker[worker.index("ds4"):],
+            [
+                "ds4",
+                "-m", "/models/DeepSeek-V4.1-Flash-Q2.gguf",
+                "--ctx", "262144",
+                "--vision", "/models/DeepSeek-V4.1-Flash-Vision.gguf",
+                "--tensor-parallel",
+                "--role", "worker",
+                "--coordinator", "192.168.100.1", "9911",
+                "--transport", "tcp",
+            ],
+        )
+
+    def test_is_tensor_parallel_cli_worker_is_family_scoped(self) -> None:
+        self.assertTrue(
+            is_tensor_parallel_cli_worker("DeepSeek-V4.1-Flash-Q2.gguf", "Worker", True)
+        )
+        self.assertFalse(
+            is_tensor_parallel_cli_worker("DeepSeek-V4.1-Flash-Q2.gguf", "Coordinator", True)
+        )
+        self.assertFalse(is_tensor_parallel_cli_worker("DeepSeek-V4.1-Flash-Q2.gguf", "Worker", False))
+        self.assertFalse(is_tensor_parallel_cli_worker("GLM-5.3-Flash-Q2.gguf", "Worker", True))
 
     def test_tensor_parallel_worker_binary_override_is_family_scoped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

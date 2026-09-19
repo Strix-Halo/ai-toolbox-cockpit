@@ -1289,14 +1289,18 @@ class AppMountTests(IsolatedAsyncioTestCase):
                 await pilot.pause()
 
                 self.assertIn(
-                    "launch ds4 instead of ds4-server",
+                    "run ds4 instead of ds4-server",
                     str(app.query_one("#ds4-tp-note", Static).content),
                 )
+                self.assertTrue(app.query_one("#ds4-host", Input).disabled)
+                self.assertTrue(app.query_one("#ds4-port", Input).disabled)
 
                 app.query_one("#ds4-tensor-parallel", Checkbox).value = False
                 await pilot.pause()
 
                 self.assertEqual(str(app.query_one("#ds4-tp-note", Static).content), "")
+                self.assertFalse(app.query_one("#ds4-host", Input).disabled)
+                self.assertFalse(app.query_one("#ds4-port", Input).disabled)
 
     async def test_vllm_server_controls_have_persistent_labels(self) -> None:
         expected_labels = {

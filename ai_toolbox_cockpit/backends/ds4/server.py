@@ -15,11 +15,11 @@ from ai_toolbox_cockpit.settings import load_default_toolbox
 from ai_toolbox_cockpit.widgets import CockpitCheckbox, ConfirmModal, SearchableSelect
 
 from .config import (
-    TENSOR_PARALLEL_WORKER_BINARIES,
     get_artifact_role,
     get_model_artifact,
-    get_model_family,
     get_model_server_defaults,
+    is_tensor_parallel_cli_worker,
+    resolve_server_binary,
 )
 from .model_manager import scan_local_models
 from .server_runner import build_server_cmd
@@ -421,22 +421,24 @@ class Ds4ServerPanel(BackendServerPanel):
         layers.disabled = tensor_active
         if tensor_active:
             layers.value = ""
-        self._sync_tensor_parallel_binary_note(tensor_active)
+        self._sync_worker_cli_controls(tensor_active)
 
-    def _sync_tensor_parallel_binary_note(self, tensor_active: bool) -> None:
+    def _sync_worker_cli_controls(self, tensor_active: bool) -> None:
         role = self.query_one("#ds4-role", SearchableSelect).value or "Standalone"
-        worker_binary = (
-            TENSOR_PARALLEL_WORKER_BINARIES.get(get_model_family(self._current_model_path), "")
-            if tensor_active and role.lower() == "worker"
-            else ""
-        )
+        cli_worker = is_tensor_parallel_cli_worker(self._current_model_path, role, tensor_active)
+        for control_id in ("ds4-host", "ds4-port"):
+            self.query_one(f"#{control_id}", Input).disabled = cli_worker
         note = self.query_one("#ds4-tp-note", Static)
-        if not worker_binary:
+        if not cli_worker:
             note.update("")
             return
+        binary = resolve_server_binary(
+            self._current_model_path, role, True, self._toolbox_server_binary()
+        )
         note.update(
-            f"Tensor-parallel workers for this model launch {worker_binary} "
-            f"instead of {self._toolbox_server_binary()}."
+            f"Tensor-parallel workers run {binary} instead of "
+            f"{self._toolbox_server_binary()}. {binary} serves no HTTP API, so host "
+            "and port are not passed."
         )
 
     def _toolbox_server_binary(self) -> str:
