@@ -3,7 +3,11 @@ import shlex
 from .config import is_tensor_parallel_cli_worker, resolve_server_binary
 from .model_manager import get_models_dir
 from ai_toolbox_cockpit.runtime.engines import adapt_nvidia_runtime_args
-from ai_toolbox_cockpit.runtime.toolboxes import upgrade_groups_for_podman
+from ai_toolbox_cockpit.runtime.rdma import RDMA_DEVICE_PATH, container_rdma_args
+from ai_toolbox_cockpit.runtime.toolboxes import (
+    extend_missing_option_pairs,
+    upgrade_groups_for_podman,
+)
 
 KV_DISK_CONTAINER_DIR = "/var/cache/ds4-kv"
 MXFP4_TILE4_ENV = "DS4_ROCM_ENABLE_MXFP4_TILE4=1"
@@ -57,11 +61,15 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
                      rdma_device: str = "",
                      rdma_port: str = "",
                      rdma_gid_index: str = "",
+                     rdma_path: str = RDMA_DEVICE_PATH,
                      peer_default_port: str = "8081") -> list[str]:
     
     models_dir = str(get_models_dir())
     engine_args = _clean_engine_args(toolbox_config.get("args", []))
     engine_args = adapt_nvidia_runtime_args(engine, engine_args)
+    # InfiniBand passthrough: when the host exposes /dev/infiniband, hand the
+    # devices to the container so RoCE/RDMA transports can reach the NIC.
+    engine_args = extend_missing_option_pairs(engine_args, container_rdma_args(engine, rdma_path))
     engine_args = upgrade_groups_for_podman(engine, engine_args)
     server_binary = resolve_server_binary(
         model_path,

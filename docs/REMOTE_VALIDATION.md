@@ -47,6 +47,7 @@ Prerequisite: one exact catalogued DS4 GGUF already present in the configured DS
 4. Validate SSD streaming separately, first with the model's maintained defaults.
 5. Only after standalone passes, use two hosts for coordinator/worker mode. Verify host networking, role, layer ranges, peer address, and distributed prefill settings in both previews before launch.
 6. For the catalogued DeepSeek V4.1 Flash Q2, validate the tensor-parallel profile separately. Confirm the standalone default enables SSD streaming with a `92GB` routed-expert cache, the vision encoder is offered, and clearing SSD streaming leaves experts resident. Then select Coordinator/Worker and verify `--tensor-parallel`, TCP transport, the `9911` link port, and, for RoCE, `--rdma-device`, `--rdma-port` and `--rdma-gid-index` in both previews. Confirm the Worker preview runs `ds4` without `--host` or `--port` while the Coordinator preview runs `ds4-server` with both, and that neither preview emits `--layers` or SSD flags. Confirm RoCE without a device is rejected.
+7. Verify InfiniBand passthrough on a host that has `/dev/infiniband`: the Podman preview should carry `--device /dev/infiniband` and `--ulimit memlock=-1`, and the Docker preview one `--device` per node under that directory. On a host without InfiniBand, confirm neither appears. Confirm RoCE traffic actually uses the NIC inside the container.
 
 Do not treat distributed mode as validated from command construction alone.
 

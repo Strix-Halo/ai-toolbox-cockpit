@@ -349,6 +349,62 @@ class Ds4CommandTests(unittest.TestCase):
             ],
         )
 
+    def devices(self, command: list[str]) -> list[str]:
+        return [
+            command[index + 1]
+            for index, token in enumerate(command)
+            if token == "--device"
+        ]
+
+    def test_infiniband_devices_reach_the_podman_ds4_container(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as infiniband:
+            for node in ("issm0", "rdma_cm", "uverbs0"):
+                (Path(infiniband) / node).touch()
+            model = Path(directory) / "DeepSeek-V4.1-Flash-Q2.gguf"
+            model.touch()
+            worker = self.build(
+                directory,
+                model_path=str(model),
+                role="Worker",
+                tensor_parallel=True,
+                transport="rdma",
+                rdma_device="rocep194s0",
+                rdma_path=infiniband,
+            )
+
+        self.assertIn(infiniband, self.devices(worker))
+        self.assertIn("memlock=-1", worker)
+        self.assertEqual(worker.count("--group-add"), 1)
+        self.assertEqual(worker[worker.index("--group-add") + 1], "keep-groups")
+
+    def test_infiniband_device_nodes_reach_the_docker_ds4_container(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as infiniband:
+            for node in ("rdma_cm", "uverbs0"):
+                (Path(infiniband) / node).touch()
+            model = Path(directory) / "DeepSeek-V4.1-Flash-Q2.gguf"
+            model.touch()
+            worker = self.build(
+                directory,
+                engine="docker",
+                model_path=str(model),
+                role="Worker",
+                tensor_parallel=True,
+                transport="rdma",
+                rdma_device="rocep194s0",
+                rdma_path=infiniband,
+            )
+
+        self.assertIn(f"{infiniband}/rdma_cm", self.devices(worker))
+        self.assertIn(f"{infiniband}/uverbs0", self.devices(worker))
+        self.assertIn("memlock=-1", worker)
+
+    def test_hosts_without_infiniband_get_no_rdma_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            command = self.build(directory, rdma_path=str(Path(directory) / "absent"))
+
+        self.assertNotIn("memlock=-1", command)
+        self.assertNotIn("rdma", self.devices(command))
+
     def test_is_tensor_parallel_cli_worker_is_family_scoped(self) -> None:
         self.assertTrue(
             is_tensor_parallel_cli_worker("DeepSeek-V4.1-Flash-Q2.gguf", "Worker", True)

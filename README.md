@@ -189,6 +189,11 @@ defaults to port `8000`.
   Worker role runs the `ds4` CLI instead of the toolbox default `ds4-server`; it
   serves no HTTP API, so host and port are not passed and those fields are
   disabled while the worker is selected. The coordinator keeps `ds4-server`.
+- **InfiniBand:** every DwarfStar container gets the host's InfiniBand devices
+  automatically when `/dev/infiniband` exists. Podman receives the device
+  directory with the `rdma` group and an unlimited memlock ulimit; Docker
+  receives each device node individually. Hosts without InfiniBand are unchanged
+  and no flags are added.
 - The coordinator link address defaults to port `9911`; both hosts need matching
   builds, model and vision files, and context settings.
 

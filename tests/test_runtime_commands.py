@@ -1,8 +1,11 @@
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from ai_toolbox_cockpit.runtime.engines import ContainerEngine, adapt_nvidia_runtime_args
+from ai_toolbox_cockpit.runtime.rdma import container_rdma_args, host_rdma_device_nodes
 from ai_toolbox_cockpit.runtime.interactive import (
     InteractiveBackend,
     InteractiveRuntime,
@@ -17,6 +20,43 @@ from ai_toolbox_cockpit.runtime.toolboxes import (
     inspect_installed_toolboxes,
     runtime_for_installed_toolbox,
 )
+
+
+class RdmaPassthroughTests(unittest.TestCase):
+    def infiniband(self, *nodes: str) -> tuple[str, list[str]]:
+        root = tempfile.TemporaryDirectory()
+        for node in nodes:
+            (Path(root.name) / node).touch()
+        return root, list(nodes)
+
+    def test_podman_passes_the_infiniband_directory_and_rdma_group(self) -> None:
+        root, _ = self.infiniband("rdma_cm", "uverbs0")
+        with root:
+            self.assertEqual(
+                container_rdma_args(ContainerEngine.PODMAN, root.name),
+                ["--device", root.name, "--group-add", "rdma", "--ulimit", "memlock=-1"],
+            )
+
+    def test_docker_passes_each_infiniband_device_node(self) -> None:
+        root, nodes = self.infiniband("issm0", "rdma_cm", "uverbs0")
+        with root:
+            args = container_rdma_args("docker", root.name)
+        expected: list[str] = []
+        for node in sorted(nodes):
+            expected.extend(["--device", f"{root.name}/{node}"])
+        expected.extend(["--ulimit", "memlock=-1"])
+        self.assertEqual(args, expected)
+
+    def test_docker_without_device_nodes_passes_nothing(self) -> None:
+        root, _ = self.infiniband()
+        with root:
+            self.assertEqual(container_rdma_args("docker", root.name), [])
+
+    def test_absent_infiniband_passes_no_flags(self) -> None:
+        for engine in ("podman", "docker"):
+            with self.subTest(engine=engine):
+                self.assertEqual(container_rdma_args(engine, "/nonexistent-infiniband"), [])
+                self.assertEqual(host_rdma_device_nodes("/nonexistent-infiniband"), [])
 
 
 class RuntimeCommandTests(unittest.TestCase):
