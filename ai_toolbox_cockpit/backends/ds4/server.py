@@ -82,6 +82,15 @@ class Ds4ServerPanel(BackendServerPanel):
                         value=False,
                         id="ds4-mxfp4-down-rgroup-enabled",
                     )
+            with Vertical(id="ds4-v41-bounded-replay-zone", classes="server-settings"):
+                yield Label("DeepSeek V4.1 decoder", classes="settings-title")
+                with Horizontal(classes="options-row"):
+                    yield CockpitCheckbox(
+                        "SWA bounded replay",
+                        value=False,
+                        id="ds4-v41-bounded-replay-enabled",
+                    )
+                    yield Static("Faster approximate inference (n=128).")
             with Horizontal(classes="options-row"):
                 yield CockpitCheckbox("Disk KV cache", value=False, id="ds4-kv-enabled")
             with Horizontal(classes="compact-fields"):
@@ -299,6 +308,7 @@ class Ds4ServerPanel(BackendServerPanel):
         self.query_one("#ds4-ssd-layers", Input).value = str(defaults.get("ssd_full_layers", ""))
         self.query_one("#ds4-ssd-cold", CockpitCheckbox).value = bool(defaults.get("ssd_cold", False)) if streaming else False
         self._refresh_mxfp4_controls(model, model_changed)
+        self._refresh_v41_bounded_replay_control(model, model_changed)
         self._refresh_vision_control(model, model_changed)
         if model_changed:
             self.query_one("#ds4-mtp-enabled", Checkbox).value = False
@@ -320,6 +330,18 @@ class Ds4ServerPanel(BackendServerPanel):
         elif not supported:
             tile4.value = False
             rgroup.value = False
+
+    def _refresh_v41_bounded_replay_control(
+        self, model_path: str, model_changed: bool
+    ) -> None:
+        supported = get_model_artifact(model_path).get("family") == "deepseek-v4.1-flash"
+        self.query_one("#ds4-v41-bounded-replay-zone", Vertical).styles.display = (
+            "block" if supported else "none"
+        )
+        replay = self.query_one("#ds4-v41-bounded-replay-enabled", CockpitCheckbox)
+        replay.disabled = not supported
+        if model_changed or not supported:
+            replay.value = False
 
     def _refresh_vision_control(self, model_path: str, model_changed: bool) -> None:
         family = get_model_artifact(model_path).get("family")
@@ -584,6 +606,9 @@ class Ds4ServerPanel(BackendServerPanel):
             dist_window if role == "Coordinator" else None,
             self.query_one("#ds4-mxfp4-tile4-enabled", Checkbox).value,
             self.query_one("#ds4-mxfp4-down-rgroup-enabled", Checkbox).value,
+            v41_decoder_swa_bounded_replay_enabled=self.query_one(
+                "#ds4-v41-bounded-replay-enabled", Checkbox
+            ).value,
             dspark_enabled=dspark_enabled,
             dspark_path=self.query_one("#ds4-dspark-model", SearchableSelect).value,
             dspark_confidence=dspark_confidence,

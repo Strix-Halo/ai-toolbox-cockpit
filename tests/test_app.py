@@ -963,6 +963,12 @@ class AppMountTests(IsolatedAsyncioTestCase):
                     app.query_one("#ds4-mxfp4-zone", Vertical).styles.display,
                     "none",
                 )
+                self.assertEqual(
+                    app.query_one(
+                        "#ds4-v41-bounded-replay-zone", Vertical
+                    ).styles.display,
+                    "none",
+                )
                 self.assertFalse(tile4.value)
                 self.assertFalse(rgroup.value)
                 self.assertIn("DS4_ROCM_ENABLE_MXFP4_TILE4=1", str(tile4.label))
@@ -1142,7 +1148,7 @@ class AppMountTests(IsolatedAsyncioTestCase):
         models = [
             {"name": name, "path": f"/models/{name}"}
             for name in (
-                "GLM-5.3-Flash-Q2.gguf",
+                "GLM-5.3-Flash-Q4K-Base-Q2-Experts-L03-28.gguf",
                 "GLM-5.3-Flash-Vision-Encoder.gguf",
                 "mtp.gguf",
             )
@@ -1228,6 +1234,8 @@ class AppMountTests(IsolatedAsyncioTestCase):
                 self.assertEqual(vision.value, encoder["path"])
 
     async def test_ds4_deepseek_v41_flash_q2_exposes_strix_halo_configuration(self) -> None:
+        from ai_toolbox_cockpit.backends.ds4.server import Ds4ServerPanel
+
         q2 = {
             "name": "DeepSeek-V4.1-Flash-Q2.gguf",
             "path": "/models/DeepSeek-V4.1-Flash-Q2.gguf",
@@ -1256,12 +1264,36 @@ class AppMountTests(IsolatedAsyncioTestCase):
                 self.assertEqual(app.query_one("#ds4-context", Input).value, "262144")
                 self.assertTrue(app.query_one("#ds4-ssd-enabled", CockpitCheckbox).value)
                 self.assertEqual(app.query_one("#ds4-ssd-experts", Input).value, "92GB")
+                self.assertEqual(
+                    app.query_one("#ds4-v41-bounded-replay-zone", Vertical).styles.display,
+                    "block",
+                )
+                bounded_replay = app.query_one(
+                    "#ds4-v41-bounded-replay-enabled", CockpitCheckbox
+                )
+                self.assertFalse(bounded_replay.value)
+                self.assertFalse(bounded_replay.disabled)
+                bounded_replay.value = True
                 vision_select = app.query_one("#ds4-vision", SearchableSelect)
                 self.assertFalse(vision_select.disabled)
                 vision_select.value = vision["path"]
                 await pilot.pause()
                 self.assertEqual(vision_select.value, vision["path"])
                 self.assertEqual(app.query_one("#ds4-tp-zone", Vertical).styles.display, "none")
+
+                with (
+                    patch(
+                        "ai_toolbox_cockpit.backends.ds4.server.build_server_cmd",
+                        return_value=["podman", "run"],
+                    ) as build,
+                    patch.object(app, "push_screen"),
+                ):
+                    app.query_one(Ds4ServerPanel).start_pressed()
+                self.assertTrue(
+                    build.call_args.kwargs[
+                        "v41_decoder_swa_bounded_replay_enabled"
+                    ]
+                )
 
                 role = app.query_one("#ds4-role", SearchableSelect)
                 role.value = "Coordinator"

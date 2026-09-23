@@ -846,6 +846,16 @@
           "id": "ds4-glm-5-3-flash-q2-gguf"
         },
         {
+          "name": "GLM 5.3 Flash Mixed Q2/Q4 (~137.88 GB)",
+          "family": "glm-5.3-flash",
+          "repo": "kyuz0/GLM-5.3-Flash-Mixed-Q2-Q4-GGUF",
+          "filename": "GLM-5.3-Flash-Q4K-Base-Q2-Experts-L03-28.gguf",
+          "size_gb": 137.876,
+          "recommended": false,
+          "sha256": "355ebc688de633c82838c37cd6bd0b4f840cdc711e713d867dc481c8165f391d",
+          "id": "ds4-glm-5-3-flash-q4k-base-q2-experts-l03-28-gguf"
+        },
+        {
           "name": "GLM 5.3 Flash Q4_K (~191 GB) — Higher Quality",
           "family": "glm-5.3-flash",
           "repo": "antirez/glm-5.3-flash-gguf",

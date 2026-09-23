@@ -198,6 +198,7 @@ class CatalogTests(unittest.TestCase):
         }
 
         q2 = entries["GLM-5.3-Flash-Q2.gguf"]
+        mixed = entries["GLM-5.3-Flash-Q4K-Base-Q2-Experts-L03-28.gguf"]
         q4 = entries["GLM-5.3-Flash-Q4_K.gguf"]
         vision = entries["GLM-5.3-Flash-Vision-Encoder.gguf"]
 
@@ -207,6 +208,13 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(q2["server_defaults"]["standalone_ctx"], 262144)
         self.assertNotIn("ssd_streaming", q2["server_defaults"])
         self.assertNotIn("ssd_experts", q2["server_defaults"])
+        self.assertEqual(mixed["repo"], "kyuz0/GLM-5.3-Flash-Mixed-Q2-Q4-GGUF")
+        self.assertEqual(mixed["family"], "glm-5.3-flash")
+        self.assertEqual(mixed["size_gb"], 137.876)
+        self.assertEqual(
+            mixed["sha256"],
+            "355ebc688de633c82838c37cd6bd0b4f840cdc711e713d867dc481c8165f391d",
+        )
         self.assertEqual(q4["server_defaults"]["standalone_ctx"], 4096)
         self.assertNotIn("ssd_streaming", q4["server_defaults"])
         self.assertEqual(vision["artifact_role"], "vision_encoder")

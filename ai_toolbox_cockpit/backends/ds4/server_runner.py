@@ -12,6 +12,7 @@ from ai_toolbox_cockpit.runtime.toolboxes import (
 KV_DISK_CONTAINER_DIR = "/var/cache/ds4-kv"
 MXFP4_TILE4_ENV = "DS4_ROCM_ENABLE_MXFP4_TILE4=1"
 MXFP4_DOWN_RGROUP_ENV = "DS4_ROCM_MXFP4_DOWN_RGROUP=4"
+V41_DECODER_SWA_BOUNDED_REPLAY_ENV = "DS4_ENABLE_V41_DECODER_SWA_BOUNDED_REPLAY=1"
 
 def _parse_peer_addr(peer_addr: str, default_port: str = "8081") -> tuple[str, str]:
     """Parse peer address input into (ip, port). Supports 'IP PORT', 'IP:PORT', or bare 'IP'."""
@@ -51,6 +52,7 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
                      dist_prefill_window: int | None = None,
                      mxfp4_tile4_enabled: bool = True,
                      mxfp4_down_rgroup_enabled: bool = True,
+                     v41_decoder_swa_bounded_replay_enabled: bool = False,
                      dspark_enabled: bool = False,
                      dspark_path: str = "",
                      dspark_confidence: float = 0.7,
@@ -109,6 +111,8 @@ def build_server_cmd(engine: str, image: str, model_path: str, ctx: int,
         docker_args.extend(["--env", MXFP4_TILE4_ENV])
     if mxfp4_down_rgroup_enabled:
         docker_args.extend(["--env", MXFP4_DOWN_RGROUP_ENV])
+    if v41_decoder_swa_bounded_replay_enabled:
+        docker_args.extend(["--env", V41_DECODER_SWA_BOUNDED_REPLAY_ENV])
         
     if engine == "podman":
         docker_args.extend([

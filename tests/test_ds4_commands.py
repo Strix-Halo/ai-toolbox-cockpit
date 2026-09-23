@@ -74,7 +74,7 @@ class Ds4CommandTests(unittest.TestCase):
 
     def test_embedded_mtp_and_glm53_vision_can_be_enabled_together(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            model = Path(directory) / "GLM-5.3-Flash-Q2.gguf"
+            model = Path(directory) / "GLM-5.3-Flash-Q4K-Base-Q2-Experts-L03-28.gguf"
             vision = Path(directory) / "GLM-5.3-Flash-Vision-Encoder.gguf"
             model.touch()
             vision.touch()
@@ -111,6 +111,17 @@ class Ds4CommandTests(unittest.TestCase):
         self.assertIn("DS4_ROCM_ENABLE_MXFP4_TILE4=1", rgroup_disabled)
         self.assertNotIn("DS4_ROCM_MXFP4_DOWN_RGROUP=4", rgroup_disabled)
 
+    def test_v41_decoder_swa_bounded_replay_environment_is_opt_in(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            disabled = self.build(directory)
+            enabled = self.build(
+                directory, v41_decoder_swa_bounded_replay_enabled=True
+            )
+
+        environment = "DS4_ENABLE_V41_DECODER_SWA_BOUNDED_REPLAY=1"
+        self.assertNotIn(environment, disabled)
+        self.assertIn(environment, enabled)
+
     def test_glm53_vision_encoder_is_passed_as_a_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             vision = Path(directory) / "GLM-5.3-Flash-Vision-Encoder.gguf"
@@ -137,11 +148,14 @@ class Ds4CommandTests(unittest.TestCase):
 
     def test_glm53_catalog_defaults_match_strix_halo_starting_points(self) -> None:
         q2 = get_model_server_defaults("GLM-5.3-Flash-Q2.gguf")
+        mixed = get_model_server_defaults("GLM-5.3-Flash-Q4K-Base-Q2-Experts-L03-28.gguf")
         q4 = get_model_server_defaults("GLM-5.3-Flash-Q4_K.gguf")
 
         self.assertEqual(q2["standalone_ctx"], 262144)
         self.assertFalse(q2.get("ssd_streaming", False))
         self.assertNotIn("ssd_experts", q2)
+        self.assertEqual(mixed["standalone_ctx"], 262144)
+        self.assertFalse(mixed.get("ssd_streaming", False))
         self.assertEqual(q4["standalone_ctx"], 4096)
         self.assertFalse(q4.get("ssd_streaming", False))
 
