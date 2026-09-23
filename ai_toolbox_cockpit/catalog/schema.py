@@ -67,14 +67,18 @@ def _validate_model_entry(backend_id: str, entry: dict[str, Any], context: str) 
             if not isinstance(defaults, dict):
                 raise CatalogError(f"{defaults_context} must be an object")
             unknown = set(defaults).difference({
-                "batch_size", "ubatch_size", "parallel_sequences", "gpu_layers",
-                "kv_cache_type",
+                "context_size", "batch_size", "ubatch_size",
+                "parallel_sequences", "gpu_layers", "kv_cache_type",
+                "flash_attention", "load_mode",
             })
             if unknown:
                 raise CatalogError(
                     f"{defaults_context} has unsupported settings: {', '.join(sorted(unknown))}"
                 )
-            for key in ("batch_size", "ubatch_size", "parallel_sequences"):
+            for key in (
+                "context_size", "batch_size", "ubatch_size",
+                "parallel_sequences",
+            ):
                 value = defaults.get(key)
                 if value is not None and (not isinstance(value, int) or value <= 0):
                     raise CatalogError(f"{defaults_context}.{key} must be a positive integer")
@@ -88,6 +92,14 @@ def _validate_model_entry(backend_id: str, entry: dict[str, Any], context: str) 
             kv_cache_type = defaults.get("kv_cache_type")
             if kv_cache_type is not None and kv_cache_type not in LLAMA_KV_CACHE_TYPES.difference({"default"}):
                 raise CatalogError(f"{defaults_context}.kv_cache_type is unsupported")
+            flash_attention = defaults.get("flash_attention")
+            if flash_attention is not None and not isinstance(flash_attention, bool):
+                raise CatalogError(
+                    f"{defaults_context}.flash_attention must be a boolean"
+                )
+            load_mode = defaults.get("load_mode")
+            if load_mode is not None and load_mode not in LLAMA_LOAD_MODES:
+                raise CatalogError(f"{defaults_context}.load_mode is unsupported")
         mtp = entry.get("mtp")
         if mtp is not None:
             if not isinstance(mtp, dict):
